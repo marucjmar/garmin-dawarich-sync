@@ -35,7 +35,10 @@ services:
     environment:
       SERVER_ENABLED: "true"
     volumes:
-      - ./data:/data
+      - garmin-dawarich-sync-data:/data
+
+volumes:
+  garmin-dawarich-sync-data:
 ```
 
 ## Configure
