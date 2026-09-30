@@ -1,0 +1,20 @@
+{
+  "name": "garmin-dawarich-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Garmin Connect to Dawarich GPX synchronizer",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "sync": "node dist/sync.js",
+    "dev": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "garmin-connect-nexxt": "^1.6.24"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.3"
+  }
+}

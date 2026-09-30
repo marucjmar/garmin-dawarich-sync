@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="pl">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Garmin → Dawarich</title>
+
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 760px;
+      margin: 32px auto;
+      padding: 0 16px;
+      background: #f7f7f7;
+      color: #222;
+    }
+
+    .card {
+      background: white;
+      padding: 24px;
+      border-radius: 14px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 12px #0001;
+    }
+
+    input,
+    button {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 11px;
+      margin: 6px 0 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+      background: #222;
+      color: white;
+      border: 0;
+      transition: opacity .2s;
+    }
+
+    button:hover:not(:disabled) {
+      opacity: .85;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .55;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .ok {
+      color: #16733b;
+    }
+
+    .err {
+      color: #b00020;
+    }
+
+    .muted {
+      color: #666;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .status {
+      padding: 12px;
+      border-radius: 8px;
+      background: #f1f1f1;
+      margin-bottom: 12px;
+    }
+
+    .status.success {
+      background: #eaf8ef;
+      color: #16733b;
+    }
+
+    .status.error {
+      background: #fff0f0;
+      color: #b00020;
+    }
+
+    .status.loading {
+      background: #f1f5ff;
+    }
+
+    .button-content {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+    }
+
+    .loader {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, .35);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+
+    button.loading .loader {
+      display: inline-block;
+    }
+
+    button.loading .button-text {
+      opacity: .9;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .sync-progress {
+      margin-top: 12px;
+      display: none;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: #e5e5e5;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-bar-inner {
+      height: 100%;
+      width: 100%;
+      background: #222;
+      border-radius: 999px;
+      animation: progress 1.2s ease-in-out infinite;
+      transform-origin: left;
+    }
+
+    @keyframes progress {
+      0% {
+        transform: translateX(-100%);
+      }
+
+      50% {
+        transform: translateX(0%);
+      }
+
+      100% {
+        transform: translateX(100%);
+      }
+    }
+
+    .activity {
+      font-family: monospace;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    @media(max-width:600px) {
+      .row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Garmin → Dawarich</h1>
+
+  <!-- CONFIG -->
+  <div class="card">
+    <h2>Configuration</h2>
+
+    <label>Garmin e-mail</label>
+    <input id="garminUsername" type="email" autocomplete="username">
+
+    <label>Garmin password</label>
+    <input id="garminPassword" type="password" autocomplete="current-password">
+
+    <div class="row">
+      <div>
+        <label>Dawarich URL</label>
+        <input id="dawarichUrl" placeholder="https://dawarich.example.com">
+      </div>
+
+      <div>
+        <label>Dawarich API key</label>
+        <input id="dawarichApiKey" type="password">
+      </div>
+    </div>
+
+    <button id="save">
+      <span class="button-content">
+        <span class="loader"></span>
+        <span class="button-text">Save configuration</span>
+      </span>
+    </button>
+
+    <div id="configMessage"></div>
+  </div>
+
+
+  <!-- GARMIN -->
+  <div class="card">
+
+    <h2>Garmin</h2>
+
+    <div id="loginStatus" class="status">
+      Loading…
+    </div>
+
+    <button id="login">
+      <span class="button-content">
+        <span class="loader"></span>
+        <span class="button-text">
+          Log in / refresh session
+        </span>
+      </span>
+    </button>
+
+
+    <!-- MFA -->
+
+    <div id="mfaBox" style="display:none">
+
+      <div class="status loading">
+        Garmin requires MFA authentication.
+        Enter the code from the app or via text message.
+      </div>
+
+      <label>MFA code</label>
+
+      <input id="mfaCode" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
+
+      <button id="mfa">
+
+        <span class="button-content">
+          <span class="loader"></span>
+
+          <span class="button-text">
+            Confirm MFA
+          </span>
+        </span>
+
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <!-- SYNC -->
+
+  <div class="card">
+
+    <h2>Synchronization</h2>
+
+    <button id="sync">
+
+      <span class="button-content">
+        <span class="loader"></span>
+
+        <span class="button-text">
+          Sync now
+        </span>
+      </span>
+
+    </button>
+
+
+    <div id="syncProgress" class="sync-progress">
+
+      <div class="muted">
+        Sync in progress…
+      </div>
+
+      <div class="progress-bar">
+        <div class="progress-bar-inner"></div>
+      </div>
+
+      <div id="currentActivity" class="activity"></div>
+
+    </div>
+
+
+    <pre id="syncStatus"></pre>
+
+  </div>
+
+
+  <script>
+    let formDirty = false;
+
+    function markFormDirty() {
+      formDirty = true;
+    }
+
+    document
+    .querySelectorAll("#garminUsername, #garminPassword, #dawarichUrl, #dawarichApiKey")
+    .forEach(input => {
+      input.addEventListener("input", markFormDirty);
+    });
+    
+    /*
+     * -------------------------------------------------------
+     * Helpers
+     * -------------------------------------------------------
+     */
+
+    async function api(url, options = {}) {
+
+      const response = await fetch(
+        url,
+        options
+      );
+
+      const text =
+        await response.text();
+
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {
+          error: text
+        };
+      }
+
+      if (!response.ok) {
+
+        throw new Error(
+          data.error ||
+          response.statusText
+        );
+      }
+
+      return data;
+    }
+
+
+    function val(id) {
+      return document
+        .getElementById(id)
+        .value;
+    }
+
+
+    /*
+     * Button loader
+     */
+
+    function setButtonLoading(
+      button,
+      loading,
+      loadingText = "Przetwarzanie…"
+    ) {
+
+      if (!button) return;
+
+      const text =
+        button.querySelector(".button-text");
+
+      if (loading) {
+
+        button.disabled = true;
+
+        button.classList.add(
+          "loading"
+        );
+
+        button.dataset.originalText =
+          text.textContent;
+
+        text.textContent =
+          loadingText;
+
+      } else {
+
+        button.disabled = false;
+
+        button.classList.remove(
+          "loading"
+        );
+
+        if (
+          button.dataset.originalText
+        ) {
+
+          text.textContent =
+            button.dataset.originalText;
+        }
+      }
+    }
+
+
+    /*
+     * Messages
+     */
+
+    function showMessage(
+      element,
+      message,
+      type = ""
+    ) {
+
+      element.className =
+        "status " + type;
+
+      element.textContent =
+        message;
+    }
+
+
+    /*
+     * -------------------------------------------------------
+     * Refresh status
+     * -------------------------------------------------------
+     */
+
+    async function refresh() {
+
+      try {
+
+        const s =
+          await api("/api/status");
+
+
+        /*
+         * Garmin status
+         */
+
+        let garminText =
+          "Garmin: " +
+          s.garminStatus;
+
+
+        if (
+          s.garminStatus ===
+          "connected"
+        ) {
+
+          garminText =
+            "Garmin: ✓ Connected";
+
+        } else if (
+          s.garminStatus ===
+          "mfa"
+        ) {
+
+          garminText =
+            "Garmin: MFA required";
+
+        } else if (
+          s.garminStatus ===
+          "logging_in"
+        ) {
+
+          garminText =
+            "Garmin: logging in…";
+
+        } else if (
+          s.garminStatus ===
+          "error"
+        ) {
+
+          garminText =
+            "Garmin: error";
+
+        }
+
+
+        /*
+         * Dawarich
+         */
+
+        let dawText =
+          "Dawarich: " +
+          s.dawarichStatus;
+
+
+        if (
+          s.dawarichStatus ===
+          "configured"
+        ) {
+
+          dawText =
+            "Dawarich: ✓ configured";
+        }
+
+
+        let html =
+          garminText +
+          "<br>" +
+          dawText;
+
+
+        if (s.error) {
+
+          html +=
+            '<br><span class="err">' +
+            escapeHtml(s.error) +
+            "</span>";
+        }
+
+
+        const status =
+          document.getElementById(
+            "loginStatus"
+          );
+
+        status.innerHTML =
+          html;
+
+
+        /*
+         * MFA
+         */
+
+        document
+          .getElementById("mfaBox")
+          .style.display =
+          s.garminStatus === "mfa"
+            ? "block"
+            : "none";
+
+
+        /*
+         * Sync status
+         */
+
+        document
+          .getElementById(
+            "syncStatus"
+          )
+          .textContent =
+          JSON.stringify(
+            s.sync,
+            null,
+            2
+          );
+
+
+        /*
+         * Sync loader
+         */
+
+        const progress =
+          document.getElementById(
+            "syncProgress"
+          );
+
+        if (
+          s.sync &&
+          s.sync.syncRunning
+        ) {
+
+          progress.style.display =
+            "block";
+
+          const current =
+            document.getElementById(
+              "currentActivity"
+            );
+
+          if (
+            s.sync.progress &&
+            s.sync.progress
+              .currentActivityId
+          ) {
+
+            current.textContent =
+              "Activity: " +
+              s.sync.progress
+                .currentActivityId;
+
+          } else {
+
+            current.textContent =
+              "Preparing...";
+          }
+
+        } else {
+
+          progress.style.display =
+            "none";
+        }
+
+
+        /*
+         * Populate Dawarich URL
+         */
+
+        if (s.config && !formDirty) {
+          document.getElementById("garminUsername").value =
+            s.config.garminUsername || "";
+
+          document.getElementById("garminPassword").value = "*****";
+
+          document.getElementById("dawarichUrl").value =
+            s.config.dawarichUrl || "";
+
+          document.getElementById("dawarichApiKey").value = "*******";
+        }
+
+      } catch (e) {
+
+        document
+          .getElementById(
+            "loginStatus"
+          )
+          .textContent =
+          e.message;
+      }
+    }
+
+
+    /*
+     * Escape HTML
+     */
+
+    function escapeHtml(value) {
+
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+
+    /*
+     * -------------------------------------------------------
+     * Save config
+     * -------------------------------------------------------
+     */
+
+    document
+      .getElementById("save")
+      .onclick = async () => {
+
+        const button =
+          document.getElementById(
+            "save"
+          );
+
+        const message =
+          document.getElementById(
+            "configMessage"
+          );
+
+
+        setButtonLoading(
+          button,
+          true,
+          "Saving…"
+        );
+
+
+        try {
+          await api(
+            "/api/config",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+
+              body: JSON.stringify({
+                garminUsername:
+                  val("garminUsername"),
+
+                garminPassword:
+                  val("garminPassword"),
+
+                dawarichUrl:
+                  val("dawarichUrl"),
+
+                dawarichApiKey:
+                  val("dawarichApiKey")
+              })
+            }
+          )
+
+          formDirty = false;
+
+          showMessage(
+            message,
+            "✓ The configuration has been saved.",
+            "success"
+          );
+
+
+          await refresh();
+
+
+        } catch (e) {
+
+          showMessage(
+            message,
+            e.message,
+            "error"
+          );
+
+        } finally {
+
+          setButtonLoading(
+            button,
+            false
+          );
+        }
+      };
+
+
+    /*
+     * -------------------------------------------------------
+     * Garmin login
+     * -------------------------------------------------------
+     */
+
+    document
+      .getElementById("login")
+      .onclick = async () => {
+
+        const button =
+          document.getElementById(
+            "login"
+          );
+
+
+        setButtonLoading(
+          button,
+          true,
+          "Log In…"
+        );
+
+
+        try {
+
+          const result =
+            await api(
+              "/api/login",
+              {
+                method: "POST"
+              }
+            );
+
+
+          if (
+            result.mfaRequired
+          ) {
+
+            document
+              .getElementById(
+                "mfaCode"
+              )
+              .focus();
+          }
+
+
+          await refresh();
+
+
+        } catch (e) {
+
+          alert(
+            "Login failed:\n\n" +
+            e.message
+          );
+
+        } finally {
+
+          /*
+           * If we are in MFA,
+           * the button can be unlocked.
+           */
+
+          setButtonLoading(
+            button,
+            false
+          );
+        }
+      };
+
+
+    /*
+     * -------------------------------------------------------
+     * MFA
+     * -------------------------------------------------------
+     */
+
+    document
+      .getElementById("mfa")
+      .onclick = async () => {
+
+        const button =
+          document.getElementById(
+            "mfa"
+          );
+
+
+        const code =
+          val("mfaCode").trim();
+
+
+        if (!code) {
+
+          alert(
+            "Enter the MFA code."
+          );
+
+          return;
+        }
+
+
+        setButtonLoading(
+          button,
+          true,
+          "Verifying MFA…"
+        );
+
+
+        try {
+
+          await api(
+            "/api/mfa",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+
+              body: JSON.stringify({
+                code
+              })
+            }
+          );
+
+
+          showMessage(
+            document.getElementById(
+              "loginStatus"
+            ),
+            "MFA code sent. Waiting for login to complete…",
+            "loading"
+          );
+
+
+          /*
+           * Login promise po stronie serwera
+           * może jeszcze kończyć logowanie.
+           *
+           * Odświeżamy status przez kilka sekund.
+           */
+
+          for (
+            let i = 0;
+            i < 20;
+            i++
+          ) {
+
+            await new Promise(
+              resolve =>
+                setTimeout(
+                  resolve,
+                  500
+                )
+            );
+
+            await refresh();
+          }
+
+
+        } catch (e) {
+
+          alert(
+            "MFA failed:\n\n" +
+            e.message
+          );
+
+        } finally {
+
+          setButtonLoading(
+            button,
+            false
+          );
+        }
+      };
+
+
+    /*
+     * -------------------------------------------------------
+     * Manual sync
+     * -------------------------------------------------------
+     */
+
+    document
+      .getElementById("sync")
+      .onclick = async () => {
+
+        const button =
+          document.getElementById(
+            "sync"
+          );
+
+
+        setButtonLoading(
+          button,
+          true,
+          "Starting…"
+        );
+
+
+        try {
+
+          await api(
+            "/api/sync",
+            {
+              method: "POST"
+            }
+          );
+
+
+          /*
+           * Sync runs in the background,
+           * so the button cannot
+           * wait for the entire import to complete.
+           */
+
+          showMessage(
+            document.getElementById(
+              "loginStatus"
+            ),
+            "✓ Sync has been started.",
+            "success"
+          );
+
+
+        } catch (e) {
+
+          alert(
+            "Failed to start sync:\n\n" +
+            e.message
+          );
+
+        } finally {
+
+          setButtonLoading(
+            button,
+            false
+          );
+
+          await refresh();
+        }
+      };
+
+
+    /*
+     * -------------------------------------------------------
+     * Initial load
+     * -------------------------------------------------------
+     */
+
+    refresh();
+
+
+    setInterval(
+      refresh,
+      2000
+    );
+
+  </script>
+
+</body>
+
+</html>
