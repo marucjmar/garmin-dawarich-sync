@@ -82,12 +82,12 @@
       margin-bottom: 12px;
     }
 
-    .status.success {
+    .status .success {
       background: #eaf8ef;
       color: #16733b;
     }
 
-    .status.error {
+    .status .error {
       background: #fff0f0;
       color: #b00020;
     }
@@ -438,7 +438,7 @@
         ) {
 
           garminText =
-            "Garmin: ✓ Connected";
+            "<strong class=\"success\">Garmin: ✓ Connected</strong>";
 
         } else if (
           s.garminStatus ===
@@ -460,10 +460,8 @@
           s.garminStatus ===
           "error"
         ) {
-
           garminText =
-            "Garmin: error";
-
+            "<strong class=\"error\">Garmin: error</strong>";
         }
 
 
@@ -482,16 +480,14 @@
         ) {
 
           dawText =
-            "Dawarich: ✓ configured";
+            "<strong class=\"success\">Dawarich: ✓ configured</strong>";
         }
-
 
         let html =
           dawText + "<br>" +
           garminText;
 
         if (s.error) {
-
           html +=
             '<br><span class="err">' +
             escapeHtml(s.error) +
@@ -506,7 +502,6 @@
 
         status.innerHTML =
           html;
-
 
         /*
          * MFA
