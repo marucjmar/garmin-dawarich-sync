@@ -75,8 +75,7 @@ The daily job fetches the newest 10 Garmin activities and uploads only IDs that 
 - `BATCH_SIZE` default `10`
 - `REQUEST_DELAY_MS` default `5000`
 - `DAWARICH_DELAY_MS` default `3000`
-- `SYNC_HOUR` default `3`
-- `SYNC_MINUTE` default `17`
+- `SYNC_CRON` default `0 3 * * *`
 
 ## Security
 

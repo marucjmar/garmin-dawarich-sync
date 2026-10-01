@@ -9,6 +9,16 @@ let running = false;
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+let syncPromise: Promise<void> | null = null;
+
+export function startSync() {
+  if (syncPromise) throw new Error("Sync in progress");
+  syncPromise = syncAll().catch(err => {
+    console.error("Sync failed:", err);
+  }).finally(() => { syncPromise = null; });
+  return syncPromise;
+}
+
 async function downloadGpx(client: any, activity: any): Promise<string> {
   const id = String(activity.activityId);
   const dir = path.join(TMP_DIR, id);

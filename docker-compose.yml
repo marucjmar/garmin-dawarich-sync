@@ -17,7 +17,6 @@ services:
       # Delay between Dawarich uploads.
       DAWARICH_DELAY_MS: 3000
       # Daily sync time is controlled by the in-process scheduler.
-      SYNC_HOUR: 3
-      SYNC_MINUTE: 17
+      SYNC_CRON: "* * * * *"
     volumes:
       - ./data:/data

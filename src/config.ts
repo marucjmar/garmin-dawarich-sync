@@ -9,8 +9,7 @@ export const SERVER_ENABLED = process.env.SERVER_ENABLED !== "false";
 export const BATCH_SIZE = Math.max(1, Number(process.env.BATCH_SIZE || 10));
 export const REQUEST_DELAY_MS = Math.max(0, Number(process.env.REQUEST_DELAY_MS || 5000));
 export const DAWARICH_DELAY_MS = Math.max(0, Number(process.env.DAWARICH_DELAY_MS || 3000));
-export const SYNC_HOUR = Number(process.env.SYNC_HOUR || 3);
-export const SYNC_MINUTE = Number(process.env.SYNC_MINUTE || 17);
+export const SYNC_CRON = String(process.env.SYNC_CRON || '0 3 * * *');
 
 export const STATE_FILE = path.join(DATA_DIR, "state.json");
 export const CONFIG_FILE = path.join(DATA_DIR, "config.json");

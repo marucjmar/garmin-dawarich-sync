@@ -1,15 +1,14 @@
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ensureDirs, PORT, SERVER_ENABLED, SYNC_HOUR, SYNC_MINUTE } from "./config.js";
+
+import { ensureDirs, PORT, REQUEST_DELAY_MS, SERVER_ENABLED, SYNC_CRON } from "./config.js";
 import { loadConfig, saveConfig, loadState, saveState, clearError } from "./state.js";
-import { login, submitMfa, garminStatus, garminError, hasTokenFiles } from "./garmin.js";
-import { syncAll } from "./sync.js";
+import { login, submitMfa, garminStatus, garminError, hasTokenFiles, loginPromise } from "./garmin.js";
 import { testDawarich } from "./dawarich.js";
+import { startSync } from "./sync.js";
 
 ensureDirs();
-
-let syncPromise: Promise<void> | null = null;
 
 function send(res: http.ServerResponse, status: number, data: unknown) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
@@ -22,13 +21,8 @@ async function readJson(req: http.IncomingMessage): Promise<any> {
   return body ? JSON.parse(body) : {};
 }
 
-function startSync() {
-  if (syncPromise) throw new Error("Synchronizacja już trwa");
-  syncPromise = syncAll().catch(err => {
-    console.error("Sync failed:", err);
-  }).finally(() => { syncPromise = null; });
-  return syncPromise;
-}
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delayBetweenRequests = () => delay(REQUEST_DELAY_MS);
 
 async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
@@ -43,34 +37,56 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
   if (req.method === "GET" && url.pathname === "/api/status") {
     const cfg = loadConfig();
     const state = loadState();
-    let dawStatus = cfg ? "configured" : "not_configured";
+
+    const dawStatus = cfg
+      ? "configured"
+      : "not_configured";
+
     send(res, 200, {
-      garminStatus: garminStatus === "not_configured" && hasTokenFiles() ? "connected" : garminStatus,
+      garminStatus:
+        garminStatus === "not_configured" && hasTokenFiles()
+          ? "connected"
+          : garminStatus,
+
       dawarichStatus: dawStatus,
+
       error: garminError || state.lastError,
-      config: cfg ? { dawarichUrl: cfg.dawarichUrl, garminUsername: cfg.garminUsername } : null,
+
+      config: cfg
+        ? {
+          dawarichUrl: cfg.dawarichUrl
+        }
+        : null,
+
       sync: state
     });
+
     return;
   }
 
-  if (req.method === "POST" && url.pathname === "/api/config") {
+  if (req.method === "POST" && url.pathname === "/api/dawarich-config") {
     const data = await readJson(req);
-    if (!data.garminUsername || !data.garminPassword || !data.dawarichUrl || !data.dawarichApiKey) {
-      send(res, 400, { error: "All fields are required" });
+
+    if (!data.dawarichUrl || !data.dawarichApiKey) {
+      send(res, 400, {
+        error: "Dawarich URL and API key are required"
+      });
       return;
     }
-    
+
     try {
-      await testDawarich(data);
+      await testDawarich({
+        dawarichUrl: String(data.dawarichUrl),
+        dawarichApiKey: String(data.dawarichApiKey)
+      });
     } catch (err: any) {
-      send(res, 502, { error: err?.message || String(err) });
+      send(res, 502, {
+        error: err?.message || String(err)
+      });
       return;
     }
 
     saveConfig({
-      garminUsername: String(data.garminUsername),
-      garminPassword: String(data.garminPassword),
       dawarichUrl: String(data.dawarichUrl),
       dawarichApiKey: String(data.dawarichApiKey)
     });
@@ -81,18 +97,44 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
     return;
   }
 
-  if (req.method === "POST" && url.pathname === "/api/login") {
+  if (req.method === "POST" && url.pathname === "/api/garmin-login") {
     try {
-      await login();
-      clearError();
-      startSync();
+      const data = await readJson(req);
 
-      send(res, 200, { ok: true });
+      if (!data.garminUsername || !data.garminPassword) {
+        send(res, 400, {
+          error: "Garmin e-mail and password are required"
+        });
+        return;
+      }
+
+      await login(
+        String(data.garminUsername),
+        String(data.garminPassword)
+      );
+
+      clearError();
+
+      await delayBetweenRequests(); // Small delay to ensure login state is settled
+      startSync().catch(() => {});
+
+      send(res, 200, {
+        ok: true
+      });
+
     } catch (err: any) {
-      // MFA intentionally keeps the login flow alive; don't return an error for it.
-      if (garminStatus === "mfa") send(res, 200, { ok: true, mfaRequired: true });
-      else send(res, 500, { error: err?.message || String(err) });
+      if (garminStatus === "mfa") {
+        send(res, 200, {
+          ok: true,
+          mfaRequired: true
+        });
+      } else {
+        send(res, 500, {
+          error: err?.message || String(err)
+        });
+      }
     }
+
     return;
   }
 
@@ -100,8 +142,10 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
     try {
       const data = await readJson(req);
       submitMfa(String(data.code || ""));
+      await loginPromise;
       clearError();
-      startSync();
+      await delayBetweenRequests(); // Small delay to ensure login state is settled
+      startSync().catch(() => {});
 
       send(res, 200, { ok: true });
     } catch (err: any) {
@@ -123,8 +167,8 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
 
   if (req.method === "POST" && url.pathname === "/api/sync") {
     try {
-      startSync();
       clearError();
+      startSync();
 
       send(res, 202, { ok: true, started: true });
     } catch (err: any) {
@@ -136,9 +180,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
   send(res, 404, { error: "Not found" });
 }
 
-const state = loadState();
-
-if (SERVER_ENABLED) {
+export const serve = () => {
   const server = http.createServer((req, res) => {
     handle(req, res).catch(err => {
       console.error(err);
@@ -148,21 +190,6 @@ if (SERVER_ENABLED) {
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Garmin → Dawarich listening on :${PORT}`);
-    console.log(`Daily sync: ${String(SYNC_HOUR).padStart(2,"0")}:${String(SYNC_MINUTE).padStart(2,"0")}`);
+    console.log(`Daily sync cron: ${SYNC_CRON}`);
   });
-} 
-
-if (state && hasTokenFiles()) {
-  startSync();
 }
-
-// Simple daily scheduler. It avoids an additional cron daemon inside the container.
-setInterval(() => {
-  const now = new Date();
-  if (now.getHours() === SYNC_HOUR && now.getMinutes() === SYNC_MINUTE) {
-    const state = loadState();
-    if (!state.syncRunning && hasTokenFiles()) {
-      startSync();
-    }
-  }
-}, 30_000);

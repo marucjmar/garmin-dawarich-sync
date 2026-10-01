@@ -1,9 +1,7 @@
 import fs from "node:fs";
 import { CONFIG_FILE, STATE_FILE } from "./config.js";
 
-export interface AppConfig {
-  garminUsername: string;
-  garminPassword: string;
+export interface DawarichConfig {
   dawarichUrl: string;
   dawarichApiKey: string;
 }
@@ -43,12 +41,12 @@ export function saveState(state: SyncState) {
   fs.renameSync(tmp, STATE_FILE);
 }
 
-export function loadConfig(): AppConfig | null {
+export function loadConfig(): DawarichConfig | null {
   if (!fs.existsSync(CONFIG_FILE)) return null;
   return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
 }
 
-export function saveConfig(config: AppConfig) {
+export function saveConfig(config: DawarichConfig) {
   const tmp = CONFIG_FILE + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(config, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, CONFIG_FILE);

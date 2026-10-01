@@ -21,4 +21,4 @@ ENV TMP_DIR=/tmp/garmin-dawarich
 ENV PORT=8080
 EXPOSE 8080
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/index.js"]

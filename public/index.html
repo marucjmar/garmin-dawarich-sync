@@ -182,30 +182,18 @@
 
   <!-- CONFIG -->
   <div class="card">
-    <h2>Configuration</h2>
+    <h2>Dawarich</h2>
 
-    <label>Garmin e-mail</label>
-    <input id="garminUsername" type="email" autocomplete="username">
+    <label>Dawarich URL</label>
+    <input id="dawarichUrl" type="url" placeholder="https://dawarich.example.com">
 
-    <label>Garmin password</label>
-    <input id="garminPassword" type="password" autocomplete="current-password">
-
-    <div class="row">
-      <div>
-        <label>Dawarich URL</label>
-        <input id="dawarichUrl" placeholder="https://dawarich.example.com">
-      </div>
-
-      <div>
-        <label>Dawarich API key</label>
-        <input id="dawarichApiKey" type="password">
-      </div>
-    </div>
+    <label>Dawarich API key</label>
+    <input id="dawarichApiKey" type="password" autocomplete="new-password">
 
     <button id="save">
       <span class="button-content">
         <span class="loader"></span>
-        <span class="button-text">Save configuration</span>
+        <span class="button-text">Save Configuration</span>
       </span>
     </button>
 
@@ -215,12 +203,17 @@
 
   <!-- GARMIN -->
   <div class="card">
-
     <h2>Garmin</h2>
 
     <div id="loginStatus" class="status">
       Loading…
     </div>
+
+    <label>Garmin e-mail</label>
+    <input id="garminUsername" type="email" autocomplete="username">
+
+    <label>Garmin password</label>
+    <input id="garminPassword" type="password" autocomplete="current-password">
 
     <button id="login">
       <span class="button-content">
@@ -231,34 +224,24 @@
       </span>
     </button>
 
-
-    <!-- MFA -->
-
     <div id="mfaBox" style="display:none">
-
       <div class="status loading">
         Garmin requires MFA authentication.
-        Enter the code from the app or via text message.
+        Enter the code from the app / SMS.
       </div>
 
-      <label>MFA code</label>
-
+      <label>MFA Code</label>
       <input id="mfaCode" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
 
       <button id="mfa">
-
         <span class="button-content">
           <span class="loader"></span>
-
           <span class="button-text">
             Confirm MFA
           </span>
         </span>
-
       </button>
-
     </div>
-
   </div>
 
 
@@ -309,11 +292,11 @@
     }
 
     document
-    .querySelectorAll("#garminUsername, #garminPassword, #dawarichUrl, #dawarichApiKey")
-    .forEach(input => {
-      input.addEventListener("input", markFormDirty);
-    });
-    
+      .querySelectorAll("#garminUsername, #garminPassword, #dawarichUrl, #dawarichApiKey")
+      .forEach(input => {
+        input.addEventListener("input", markFormDirty);
+      });
+
     /*
      * -------------------------------------------------------
      * Helpers
@@ -366,7 +349,7 @@
     function setButtonLoading(
       button,
       loading,
-      loadingText = "Przetwarzanie…"
+      loadingText = "Processing…"
     ) {
 
       if (!button) return;
@@ -436,8 +419,9 @@
       try {
 
         const s =
-          await api("/api/status");
-
+          await api("/api/status").catch(() => {
+            return { error: "Failed to fetch status" };
+          });
 
         /*
          * Garmin status
@@ -503,10 +487,8 @@
 
 
         let html =
-          garminText +
-          "<br>" +
-          dawText;
-
+          dawText + "<br>" +
+          garminText;
 
         if (s.error) {
 
@@ -617,7 +599,6 @@
         }
 
       } catch (e) {
-
         document
           .getElementById(
             "loginStatus"
@@ -649,84 +630,41 @@
      * -------------------------------------------------------
      */
 
-    document
-      .getElementById("save")
-      .onclick = async () => {
+    document.getElementById("save").onclick = async () => {
+      const button = document.getElementById("save");
+      const message = document.getElementById("configMessage");
 
-        const button =
-          document.getElementById(
-            "save"
-          );
+      setButtonLoading(button, true, "Zapisywanie…");
 
-        const message =
-          document.getElementById(
-            "configMessage"
-          );
+      try {
+        await api("/api/dawarich-config", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            dawarichUrl: val("dawarichUrl"),
+            dawarichApiKey: val("dawarichApiKey")
+          })
+        });
 
-
-        setButtonLoading(
-          button,
-          true,
-          "Saving…"
+        showMessage(
+          message,
+          "✓ Configuration saved.",
+          "success"
         );
 
+      } catch (e) {
+        showMessage(
+          message,
+          e.message,
+          "error"
+        );
 
-        try {
-          await api(
-            "/api/config",
-            {
-              method: "POST",
-
-              headers: {
-                "Content-Type":
-                  "application/json"
-              },
-
-              body: JSON.stringify({
-                garminUsername:
-                  val("garminUsername"),
-
-                garminPassword:
-                  val("garminPassword"),
-
-                dawarichUrl:
-                  val("dawarichUrl"),
-
-                dawarichApiKey:
-                  val("dawarichApiKey")
-              })
-            }
-          )
-
-          formDirty = false;
-
-          showMessage(
-            message,
-            "✓ The configuration has been saved.",
-            "success"
-          );
-
-
-          await refresh();
-
-
-        } catch (e) {
-
-          showMessage(
-            message,
-            e.message,
-            "error"
-          );
-
-        } finally {
-
-          setButtonLoading(
-            button,
-            false
-          );
-        }
-      };
-
+      } finally {
+        setButtonLoading(button, false);
+      }
+    };
 
     /*
      * -------------------------------------------------------
@@ -754,12 +692,16 @@
         try {
 
           const result =
-            await api(
-              "/api/login",
-              {
-                method: "POST"
-              }
-            );
+            await api("/api/garmin-login", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                garminUsername: val("garminUsername"),
+                garminPassword: val("garminPassword")
+              })
+            });
 
 
           if (
@@ -897,7 +839,8 @@
           );
 
         } finally {
-
+          await refresh();
+          
           setButtonLoading(
             button,
             false

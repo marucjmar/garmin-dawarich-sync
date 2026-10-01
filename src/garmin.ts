@@ -4,12 +4,12 @@ import { TOKEN_DIR, REQUEST_DELAY_MS } from "./config.js";
 import { loadConfig } from "./state.js";
 
 let client: any = null;
-let loginPromise: Promise<void> | null = null;
 let mfaResolver: ((code: string) => void) | null = null;
 let mfaRejecter: ((err: Error) => void) | null = null;
 
 export type GarminStatus = "not_configured" | "idle" | "logging_in" | "mfa" | "connected" | "error";
 
+export let loginPromise: Promise<void> | null = null;
 export let garminStatus: GarminStatus = "not_configured";
 export let garminError: string | undefined;
 
@@ -35,25 +35,22 @@ export function submitMfa(code: string) {
   resolve(code.trim());
 }
 
-export async function login() {
-  const cfg = loadConfig();
-  if (!cfg) throw new Error("Brak konfiguracji");
-
-  if (loginPromise) throw new Error("Logowanie już trwa");
+export async function login(garminUsername: string, garminPassword: string) {
+  if (loginPromise) throw new Error("Login already in progress");
 
   garminStatus = "logging_in";
   garminError = undefined;
 
   client = new GarminConnect({
-    username: cfg.garminUsername,
-    password: cfg.garminPassword
+    username: garminUsername,
+    password: garminPassword
   });
 
   client.httpClient.setNextRequestsDelay(REQUEST_DELAY_MS);
 
   loginPromise = client.login(
-    cfg.garminUsername,
-    cfg.garminPassword,
+    garminUsername,
+    garminPassword,
     { mfaHandler: async () => waitForMfa() }
   ).then(() => {
     client.exportTokenToFile(TOKEN_DIR);
@@ -72,12 +69,9 @@ export async function login() {
 export function getClient(): any {
   if (client) return client;
 
-  const cfg = loadConfig();
-  if (!cfg) throw new Error("No Garmin configuration");
-
   client = new GarminConnect({
-    username: cfg.garminUsername,
-    password: cfg.garminPassword
+    username: "",
+    password: ""
   });
 
   client.httpClient.setNextRequestsDelay(REQUEST_DELAY_MS);
