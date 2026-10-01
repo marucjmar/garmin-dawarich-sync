@@ -587,11 +587,6 @@
          */
 
         if (s.config && !formDirty) {
-          document.getElementById("garminUsername").value =
-            s.config.garminUsername || "";
-
-          document.getElementById("garminPassword").value = "*****";
-
           document.getElementById("dawarichUrl").value =
             s.config.dawarichUrl || "";
 
@@ -795,44 +790,7 @@
               })
             }
           );
-
-
-          showMessage(
-            document.getElementById(
-              "loginStatus"
-            ),
-            "MFA code sent. Waiting for login to complete…",
-            "loading"
-          );
-
-
-          /*
-           * Login promise po stronie serwera
-           * może jeszcze kończyć logowanie.
-           *
-           * Odświeżamy status przez kilka sekund.
-           */
-
-          for (
-            let i = 0;
-            i < 20;
-            i++
-          ) {
-
-            await new Promise(
-              resolve =>
-                setTimeout(
-                  resolve,
-                  500
-                )
-            );
-
-            await refresh();
-          }
-
-
         } catch (e) {
-
           alert(
             "MFA failed:\n\n" +
             e.message
